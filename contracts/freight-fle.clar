@@ -57,18 +57,16 @@
 (define-constant MAX-VOLUME u100000)
 (define-constant MIN-PRICE u1)
 (define-constant MAX-PRICE u1000000000000)
-(define-constant VALID-STATUSES (list 
-  "active"
-  "booked"
-  "completed"
-  "cancelled"
-))
-(define-constant VALID-BOOKING-STATUSES (list 
-  "confirmed"
-  "in-transit"
-  "delivered"
-  "disputed"
-))
+
+;; Define status constants with explicit (string-ascii 16) type
+(define-constant ACTIVE-STATUS "active")
+(define-constant BOOKED-STATUS "booked")
+(define-constant COMPLETED-STATUS "completed")
+(define-constant CANCELLED-STATUS "cancelled")
+(define-constant CONFIRMED-STATUS "confirmed")
+(define-constant IN-TRANSIT-STATUS "in-transit")
+(define-constant DELIVERED-STATUS "delivered")
+(define-constant DISPUTED-STATUS "disputed")
 
 ;; Error codes
 (define-constant ERR-NOT-AUTHORIZED (err u401))
@@ -97,12 +95,23 @@
   (and (>= price MIN-PRICE) (<= price MAX-PRICE))
 )
 
+;; Alternative approach: Direct comparison instead of using lists
 (define-private (is-valid-status (status (string-ascii 16)))
-  (not (is-none (index-of VALID-STATUSES status)))
+  (or 
+    (is-eq status ACTIVE-STATUS)
+    (is-eq status BOOKED-STATUS)
+    (is-eq status COMPLETED-STATUS)
+    (is-eq status CANCELLED-STATUS)
+  )
 )
 
 (define-private (is-valid-booking-status (status (string-ascii 16)))
-  (not (is-none (index-of VALID-BOOKING-STATUSES status)))
+  (or 
+    (is-eq status CONFIRMED-STATUS)
+    (is-eq status IN-TRANSIT-STATUS)
+    (is-eq status DELIVERED-STATUS)
+    (is-eq status DISPUTED-STATUS)
+  )
 )
 
 ;; Time management (for testing)
@@ -236,7 +245,7 @@
         base-price-ustx: base-price-ustx,
         current-price-ustx: base-price-ustx, ;; Initial price is the base price
         booking-deadline: booking-deadline,
-        status: "active"
+        status: ACTIVE-STATUS
       }
     )
     (var-set last-listing-id listing-id)
@@ -257,7 +266,7 @@
     (asserts! (> listing-id u0) ERR-INVALID-PARAMETERS)
     (asserts! (is-valid-price new-price-ustx) ERR-INVALID-PARAMETERS)
     (asserts! (is-some listing) ERR-NOT-FOUND)
-    (asserts! (is-eq (get status (unwrap-panic listing)) "active") ERR-INVALID-STATUS)
+    (asserts! (is-eq (get status (unwrap-panic listing)) ACTIVE-STATUS) ERR-INVALID-STATUS)
 
     ;; Check if caller is the carrier
     (let
@@ -292,7 +301,7 @@
 
     ;; Check if listing exists and is active
     (asserts! (is-some listing) ERR-NOT-FOUND)
-    (asserts! (is-eq (get status (unwrap-panic listing)) "active") ERR-INVALID-STATUS)
+    (asserts! (is-eq (get status (unwrap-panic listing)) ACTIVE-STATUS) ERR-INVALID-STATUS)
 
     ;; Check if deadline has passed
     (asserts! (< current-time-value (get booking-deadline (unwrap-panic listing))) ERR-PAST-DEADLINE)
@@ -320,7 +329,7 @@
           price-paid-ustx: price,
           booking-time: current-time-value,
           cargo-description: cargo-description,
-          status: "confirmed"
+          status: CONFIRMED-STATUS
         }
       )
 
@@ -328,7 +337,7 @@
       (map-set freight-listings
         { listing-id: listing-id }
         (merge (unwrap-panic listing)
-               { status: "booked" })
+               { status: BOOKED-STATUS })
       )
 
       (var-set last-booking-id booking-id)
@@ -353,9 +362,9 @@
     (asserts! (is-some booking) ERR-NOT-FOUND)
 
     ;; Check valid status transitions
-    (asserts! (or (is-eq new-status "in-transit")
-                 (is-eq new-status "delivered")
-                 (is-eq new-status "disputed"))
+    (asserts! (or (is-eq new-status IN-TRANSIT-STATUS)
+                 (is-eq new-status DELIVERED-STATUS)
+                 (is-eq new-status DISPUTED-STATUS))
              ERR-INVALID-STATUS)
 
     ;; Check if caller is the carrier
@@ -376,11 +385,11 @@
       )
 
       ;; If delivered, update listing status
-      (if (is-eq new-status "delivered")
+      (if (is-eq new-status DELIVERED-STATUS)
           (map-set freight-listings
             { listing-id: (get listing-id (unwrap-panic booking)) }
             (merge (unwrap-panic listing)
-                   { status: "completed" })
+                   { status: COMPLETED-STATUS })
           )
           true
       )
@@ -405,7 +414,7 @@
     (map-set bookings
       { booking-id: booking-id }
       (merge (unwrap-panic booking)
-             { status: "disputed" })
+             { status: DISPUTED-STATUS })
     )
 
     (ok true)
@@ -421,7 +430,7 @@
     ;; Validate parameters
     (asserts! (> listing-id u0) ERR-INVALID-PARAMETERS)
     (asserts! (is-some listing) ERR-NOT-FOUND)
-    (asserts! (is-eq (get status (unwrap-panic listing)) "active") ERR-INVALID-STATUS)
+    (asserts! (is-eq (get status (unwrap-panic listing)) ACTIVE-STATUS) ERR-INVALID-STATUS)
 
     ;; Check if caller is the carrier
     (let
@@ -436,7 +445,7 @@
       (map-set freight-listings
         { listing-id: listing-id }
         (merge (unwrap-panic listing)
-               { status: "cancelled" })
+               { status: CANCELLED-STATUS })
       )
 
       (ok true)
